@@ -1,0 +1,11 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.17
+Pillow==11.0.0
+# 使用一个兼容当前 Python 版本的 numpy 2.0.x
+numpy==2.1.2
+# 这里假设你已经在 video-subtitle-remover 环境里安装好了 torch / cuda 等
+# 如果单独安装，可按需取消下面的注释并调整版本
+torch
+
+

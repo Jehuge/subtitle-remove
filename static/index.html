@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AI 图片去水印 Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #050816;
+      --bg-elevated: #0f172a;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.15);
+      --border-subtle: rgba(148, 163, 184, 0.3);
+      --text-main: #e5e7eb;
+      --text-subtle: #9ca3af;
+      --danger: #f97373;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: radial-gradient(circle at top, #1e293b 0, #020617 45%, #000 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 1100px;
+      background: linear-gradient(145deg, rgba(15,23,42,0.98), rgba(15,23,42,0.95));
+      border-radius: 24px;
+      border: 1px solid rgba(148,163,184,0.25);
+      box-shadow:
+        0 40px 80px rgba(15,23,42,0.9),
+        0 0 0 1px rgba(148,163,184,0.25),
+        0 0 50px rgba(56,189,248,0.15);
+      padding: 24px 24px 20px;
+      backdrop-filter: blur(24px);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      gap: 12px;
+    }
+    .title-block h1 {
+      font-size: 22px;
+      letter-spacing: 0.02em;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .title-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(56,189,248,0.2), rgba(56,189,248,0.05));
+      border: 1px solid rgba(56,189,248,0.4);
+      color: #e0f2fe;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .title-block p {
+      margin: 0;
+      color: var(--text-subtle);
+      font-size: 13px;
+    }
+    .tag-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.35);
+      color: var(--text-subtle);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #22c55e 0, #22c55e 30%, transparent 70%);
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
+    }
+    .badge {
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(22,163,74,0.12);
+      border: 1px solid rgba(22,163,74,0.4);
+      color: #bbf7d0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .badge span {
+      font-size: 16px;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 18px;
+    }
+    @media (max-width: 900px) {
+      .main { grid-template-columns: minmax(0, 1fr); }
+    }
+    .panel {
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 55%),
+                  linear-gradient(145deg, rgba(15,23,42,0.98), rgba(15,23,42,0.96));
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.3);
+      padding: 14px 14px 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at top left, rgba(56,189,248,0.35), transparent 50%),
+        radial-gradient(circle at bottom right, rgba(59,130,246,0.15), transparent 55%);
+      mix-blend-mode: soft-light;
+      opacity: 0.35;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .panel-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #9ca3af;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-title::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      box-shadow: 0 0 0 4px rgba(56,189,248,0.25);
+    }
+    .hint {
+      font-size: 11px;
+      color: var(--text-subtle);
+    }
+    .upload-zone {
+      position: relative;
+      border-radius: 14px;
+      border: 1px dashed rgba(148,163,184,0.6);
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%),
+                  rgba(15,23,42,0.85);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
+    }
+    .upload-zone:hover {
+      border-color: rgba(56,189,248,0.8);
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 55%),
+                  rgba(15,23,42,0.9);
+      transform: translateY(-1px);
+    }
+    .upload-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 20%, #e0f2fe 0, #38bdf8 28%, #0ea5e9 45%, #0f172a 85%);
+      box-shadow:
+        0 0 0 4px rgba(56,189,248,0.3),
+        0 18px 28px rgba(15,23,42,0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0b1120;
+      font-size: 26px;
+    }
+    .upload-text-main {
+      font-size: 14px;
+      font-weight: 530;
+    }
+    .upload-text-sub {
+      font-size: 12px;
+      color: var(--text-subtle);
+    }
+    .file-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .canvas-wrapper {
+      margin-top: 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(148,163,184,0.55);
+      background: #020617;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      color: var(--text-subtle);
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 13px;
+      padding: 7px 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      background: rgba(15,23,42,0.95);
+      color: var(--text-main);
+      transition: background 0.16s ease, transform 0.12s ease, box-shadow 0.16s ease, border-color 0.12s;
+    }
+    button.primary {
+      background: radial-gradient(circle at 30% 0, #e0f2fe 0, #38bdf8 30%, #0ea5e9 55%, #1d4ed8 100%);
+      color: #0b1120;
+      border-color: rgba(56,189,248,0.4);
+      box-shadow:
+        0 16px 30px rgba(15,23,42,0.9),
+        0 0 0 1px rgba(148,163,184,0.4),
+        0 0 30px rgba(56,189,248,0.4);
+    }
+    button.primary:hover {
+      transform: translateY(-0.5px);
+      box-shadow:
+        0 18px 34px rgba(15,23,42,0.96),
+        0 0 0 1px rgba(148,163,184,0.55),
+        0 0 42px rgba(56,189,248,0.7);
+      filter: brightness(1.02);
+    }
+    button.secondary {
+      border-color: rgba(148,163,184,0.6);
+      background: rgba(15,23,42,0.9);
+    }
+    button.secondary:hover {
+      border-color: rgba(148,163,184,0.9);
+      background: rgba(15,23,42,0.96);
+      box-shadow: 0 10px 24px rgba(15,23,42,0.9);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+    .status {
+      min-height: 16px;
+      font-size: 11px;
+      color: var(--text-subtle);
+    }
+    .status.error {
+      color: var(--danger);
+    }
+    .status.success {
+      color: #4ade80;
+    }
+    .result-img-wrapper {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(148,163,184,0.55);
+      background: #020617;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 140px;
+    }
+    .result-img-wrapper img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    .result-placeholder {
+      font-size: 12px;
+      color: var(--text-subtle);
+      text-align: center;
+      padding: 20px;
+    }
+    .meta-row {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-subtle);
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(148,163,184,0.4);
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="title-block">
+      <h1>
+        AI 图片去水印
+        <span class="title-chip">LaMa Inpainting</span>
+      </h1>
+      <p>上传图片 → 框选固定水印区域 → AI 自动填充去除 → 预览与下载。</p>
+      <div class="tag-row">
+        <span class="tag"><span class="pill-dot"></span>基于 big-lama，高质量图片修复</span>
+        <span class="tag">手动框选 · 精准控制去除区域</span>
+      </div>
+    </div>
+    <div class="badge">
+      <span>✨</span>
+      高质量去水印
+    </div>
+  </div>
+
+  <div class="main">
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">源图片 & 框选水印</div>
+        <div class="hint">拖拽或点击上传，按住鼠标拖动框选水印，可多选</div>
+      </div>
+
+      <label class="upload-zone">
+        <div class="upload-icon">↑</div>
+        <div class="upload-text-main">点击或拖入图片文件</div>
+        <div class="upload-text-sub">支持 JPG / PNG，分辨率越高效果越好</div>
+        <input id="fileInput" class="file-input" type="file" accept="image/*">
+      </label>
+
+      <div class="canvas-wrapper" id="canvasWrapper" style="display:none;">
+        <canvas id="canvas"></canvas>
+      </div>
+
+      <div class="toolbar">
+        <div>
+          <div>提示：可拖多次添加多个矩形框，右键或双击空白区域取消当前操作。</div>
+        </div>
+        <div class="btn-row">
+          <button id="clearBtn" class="secondary" type="button">清空所有框</button>
+        </div>
+      </div>
+
+      <div class="status" id="statusText"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div class="panel-title">AI 去水印结果</div>
+        <div class="hint">点击“开始去水印”，稍等几秒钟查看效果</div>
+      </div>
+
+      <div class="result-img-wrapper">
+        <img id="resultImg" alt="" style="display:none;">
+        <div class="result-placeholder" id="placeholder">
+          去水印结果会显示在这里。<br>
+          上传图片并框选水印后，点击右下角按钮开始。
+        </div>
+      </div>
+
+      <div class="meta-row">
+        <div class="pill">
+          当前状态：
+          <span id="statusBadge">待上传图片</span>
+        </div>
+        <div class="btn-row">
+          <button id="downloadBtn" class="secondary" type="button" disabled>下载去水印图片</button>
+          <button id="runBtn" class="primary" type="button" disabled>开始去水印</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const canvas = document.getElementById('canvas');
+  const canvasWrapper = document.getElementById('canvasWrapper');
+  const statusText = document.getElementById('statusText');
+  const runBtn = document.getElementById('runBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const resultImg = document.getElementById('resultImg');
+  const placeholder = document.getElementById('placeholder');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const statusBadge = document.getElementById('statusBadge');
+
+  let originalImage = null;   // 原始 Image 对象
+  let imageBlob = null;       // 原始文件 blob
+  let boxes = [];             // 多个 [x1,y1,x2,y2]
+  let isDrawing = false;
+  let startX = 0, startY = 0;
+  let tempBox = null;
+
+  const ctx = canvas.getContext('2d');
+
+  function setStatus(msg, type = '') {
+    statusText.textContent = msg || '';
+    statusText.className = 'status' + (type ? ' ' + type : '');
+  }
+
+  function setBadge(text) {
+    statusBadge.textContent = text;
+  }
+
+  function resetResult() {
+    resultImg.style.display = 'none';
+    resultImg.src = '';
+    placeholder.style.display = 'block';
+    downloadBtn.disabled = true;
+  }
+
+  function drawImageAndBoxes() {
+    if (!originalImage) return;
+    canvas.width = originalImage.width;
+    canvas.height = originalImage.height;
+    ctx.drawImage(originalImage, 0, 0);
+
+    // 画已经确认的矩形
+    ctx.lineWidth = 2;
+    for (const b of boxes) {
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.16)';
+      const [x1, y1, x2, y2] = b;
+      const w = x2 - x1;
+      const h = y2 - y1;
+      ctx.fillRect(x1, y1, w, h);
+      ctx.strokeRect(x1 + 0.5, y1 + 0.5, w, h);
+    }
+
+    // 当前正在拖拽的矩形
+    if (tempBox) {
+      ctx.strokeStyle = 'rgba(248, 250, 252, 0.95)';
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.12)';
+      const [x1, y1, x2, y2] = tempBox;
+      const w = x2 - x1;
+      const h = y2 - y1;
+      ctx.fillRect(x1, y1, w, h);
+      ctx.strokeRect(x1 + 0.5, y1 + 0.5, w, h);
+    }
+  }
+
+  function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setStatus('正在加载图片...', '');
+    setBadge('加载图片中');
+    resetResult();
+
+    try {
+      const img = await loadImageFromFile(file);
+      originalImage = img;
+      imageBlob = file;
+      boxes = [];
+      tempBox = null;
+      canvasWrapper.style.display = 'block';
+      drawImageAndBoxes();
+      runBtn.disabled = false;
+      clearBtn.disabled = false;
+      setStatus('图片已加载，按住左键拖动进行框选（水印区域可多选）。', 'success');
+      setBadge('已加载图片，等待框选');
+    } catch (err) {
+      console.error(err);
+      setStatus('图片加载失败，请重试。', 'error');
+      setBadge('加载失败');
+    }
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!originalImage) return;
+    isDrawing = true;
+    const rect = canvas.getBoundingClientRect();
+    startX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    startY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    tempBox = [startX, startY, startX, startY];
+    drawImageAndBoxes();
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!isDrawing || !originalImage) return;
+    const rect = canvas.getBoundingClientRect();
+    const currentX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const currentY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    tempBox = [
+      Math.min(startX, currentX),
+      Math.min(startY, currentY),
+      Math.max(startX, currentX),
+      Math.max(startY, currentY),
+    ];
+    drawImageAndBoxes();
+  });
+
+  function finishDrawing() {
+    if (!isDrawing || !tempBox) return;
+    isDrawing = false;
+    const [x1, y1, x2, y2] = tempBox;
+    // 过滤掉太小的框
+    if (Math.abs(x2 - x1) > 4 && Math.abs(y2 - y1) > 4) {
+      boxes.push([x1, y1, x2, y2]);
+      setStatus(`已添加矩形框，当前共 ${boxes.length} 个。`, 'success');
+      setBadge(`已选择 ${boxes.length} 个区域`);
+    } else {
+      setStatus('矩形太小，已自动忽略。', 'error');
+    }
+    tempBox = null;
+    drawImageAndBoxes();
+  }
+
+  canvas.addEventListener('mouseup', finishDrawing);
+  canvas.addEventListener('mouseleave', () => {
+    if (!isDrawing) return;
+    finishDrawing();
+  });
+
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (isDrawing) {
+      isDrawing = false;
+      tempBox = null;
+      drawImageAndBoxes();
+      setStatus('已取消当前框选。', '');
+    }
+  });
+
+  canvas.addEventListener('dblclick', () => {
+    if (isDrawing) {
+      isDrawing = false;
+      tempBox = null;
+      drawImageAndBoxes();
+      setStatus('已取消当前框选。', '');
+    }
+  });
+
+  clearBtn.addEventListener('click', () => {
+    boxes = [];
+    tempBox = null;
+    drawImageAndBoxes();
+    setStatus('已清空所有矩形框。', '');
+    setBadge('等待框选');
+  });
+
+  runBtn.addEventListener('click', async () => {
+    if (!imageBlob) {
+      setStatus('请先上传图片。', 'error');
+      return;
+    }
+    if (!boxes.length) {
+      setStatus('请至少框选一个水印区域再开始。', 'error');
+      return;
+    }
+
+    runBtn.disabled = true;
+    clearBtn.disabled = true;
+    setStatus('正在调用 AI 去水印，这可能需要几秒钟...', '');
+    setBadge('模型推理中...');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', imageBlob);
+      formData.append('boxes', JSON.stringify(boxes));
+
+      const resp = await fetch('/api/remove_watermark', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        throw new Error('服务调用失败');
+      }
+
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      resultImg.src = url;
+      resultImg.style.display = 'block';
+      placeholder.style.display = 'none';
+      downloadBtn.disabled = false;
+
+      downloadBtn.onclick = () => {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'inpainted.png';
+        a.click();
+      };
+
+      setStatus('去水印完成，如有需要可调整框选区域后再次处理。', 'success');
+      setBadge('去水印完成');
+    } catch (err) {
+      console.error(err);
+      setStatus('去水印失败，请检查后端是否已启动，或稍后重试。', 'error');
+      setBadge('处理失败');
+    } finally {
+      runBtn.disabled = false;
+      clearBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
+
+
+
