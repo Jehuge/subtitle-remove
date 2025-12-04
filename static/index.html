@@ -5,6 +5,316 @@
   <title>AI 图片去水印 Demo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(56, 189, 248, 0.3);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+      display: none;
+    }
+    .progress-bar.active {
+      display: block;
+      animation: slideIn 0.3s ease;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+      width: 0%;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+    }
+    .box-number {
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      background: #38bdf8;
+      color: #0b1120;
+      font-size: 10px;
+      font-weight: 600;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+    }
+    .box-selected {
+      stroke-dasharray: 5, 5;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .undo-redo-btns {
+      display: flex;
+      gap: 4px;
+    }
+    .undo-redo-btns button {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .zoom-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .zoom-level {
+      font-size: 11px;
+      color: var(--text-subtle);
+      min-width: 50px;
+      text-align: center;
+    }
+    .canvas-container {
+      position: relative;
+      overflow: auto;
+      max-height: 600px;
+      border-radius: 12px;
+      background: #020617;
+    }
+    .canvas-container::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .canvas-container::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 4px;
+    }
+    .canvas-container::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.3);
+      border-radius: 4px;
+    }
+    .canvas-container::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.5);
+    }
+    .result-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .compare-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 999px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .compare-toggle:hover {
+      border-color: rgba(56, 189, 248, 0.6);
+      background: rgba(15, 23, 42, 0.95);
+    }
+    .compare-toggle input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .result-img-wrapper {
+      position: relative;
+    }
+    .result-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.95);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      cursor: pointer;
+      padding: 20px;
+    }
+    .result-overlay.active {
+      display: flex;
+      animation: fadeIn 0.3s ease;
+    }
+    .result-overlay img {
+      max-width: 95vw;
+      max-height: 95vh;
+      width: auto;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+      object-fit: contain;
+      cursor: default;
+    }
+    .result-overlay::before {
+      content: '点击或按 ESC 关闭';
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 20px;
+      pointer-events: none;
+    }
+    .keyboard-hint {
+      font-size: 10px;
+      color: var(--text-subtle);
+      margin-top: 4px;
+    }
+    .keyboard-hint kbd {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 10px;
+      font-family: monospace;
+      margin: 0 2px;
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      animation: slideIn 0.3s ease;
+      max-width: 300px;
+    }
+    .toast.show {
+      display: flex;
+    }
+    .toast.success {
+      border-color: rgba(34, 197, 94, 0.5);
+    }
+    .toast.error {
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    .toast-icon {
+      font-size: 18px;
+    }
+    .stats-info {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-subtle);
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .stat-value {
+      color: var(--text-main);
+      font-weight: 500;
+    }
+    .drag-over {
+      border-color: rgba(56, 189, 248, 0.9) !important;
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.3), transparent 55%),
+                  rgba(15,23,42,0.95) !important;
+      transform: scale(1.02);
+    }
+    .box-list {
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+      display: none;
+    }
+    .box-list.has-boxes {
+      display: block;
+    }
+    .box-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      background: rgba(15, 23, 42, 0.7);
+      border-radius: 6px;
+      font-size: 11px;
+      transition: background 0.2s ease;
+    }
+    .box-item:hover {
+      background: rgba(15, 23, 42, 0.9);
+    }
+    .box-item-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .box-item-delete {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 4px 8px;
+      font-size: 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+    }
+    .box-item-delete:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-subtle);
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+    .empty-state-text {
+      font-size: 13px;
+      line-height: 1.6;
+    }
     :root {
       color-scheme: dark light;
       --bg: #050816;
@@ -283,6 +593,11 @@
       background: rgba(15,23,42,0.96);
       box-shadow: 0 10px 24px rgba(15,23,42,0.9);
     }
+    button.secondary[style*="border-color: rgba(239, 68, 68"]:hover {
+      border-color: rgba(239, 68, 68, 0.7) !important;
+      background: rgba(239, 68, 68, 0.15) !important;
+      color: #fca5a5 !important;
+    }
     button:disabled {
       opacity: 0.6;
       cursor: default;
@@ -377,19 +692,56 @@
       </label>
 
       <div class="canvas-wrapper" id="canvasWrapper" style="display:none;">
-        <canvas id="canvas"></canvas>
+        <div class="canvas-container" id="canvasContainer">
+          <canvas id="canvas"></canvas>
+        </div>
       </div>
 
       <div class="toolbar">
         <div>
           <div>提示：可拖多次添加多个矩形框，右键或双击空白区域取消当前操作。</div>
+          <div class="keyboard-hint">
+            快捷键：<kbd>Ctrl+Z</kbd>撤销 <kbd>Ctrl+Y</kbd>重做 <kbd>Delete</kbd>删除选中
+          </div>
         </div>
         <div class="btn-row">
+          <div class="undo-redo-btns">
+            <button id="undoBtn" class="secondary" type="button" title="撤销 (Ctrl+Z)" disabled>↶ 撤销</button>
+            <button id="redoBtn" class="secondary" type="button" title="重做 (Ctrl+Y)" disabled>↷ 重做</button>
+          </div>
           <button id="clearBtn" class="secondary" type="button">清空所有框</button>
+          <button id="clearImageBtn" class="secondary" type="button" style="border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;" disabled>🗑️ 清除图片</button>
+        </div>
+      </div>
+
+      <div class="zoom-controls">
+        <button id="zoomOutBtn" class="secondary zoom-btn" type="button" title="缩小">−</button>
+        <span class="zoom-level" id="zoomLevel">100%</span>
+        <button id="zoomInBtn" class="secondary zoom-btn" type="button" title="放大">+</button>
+        <button id="zoomFitBtn" class="secondary" type="button" style="margin-left: 8px; padding: 6px 10px; font-size: 12px;">适应窗口</button>
+      </div>
+
+      <div class="box-list" id="boxList"></div>
+
+      <div class="stats-info">
+        <div class="stat-item">
+          <span>图片尺寸：</span>
+          <span class="stat-value" id="imageSize">-</span>
+        </div>
+        <div class="stat-item">
+          <span>已选区域：</span>
+          <span class="stat-value" id="boxCount">0</span>
+        </div>
+        <div class="stat-item">
+          <span>文件大小：</span>
+          <span class="stat-value" id="fileSize">-</span>
         </div>
       </div>
 
       <div class="status" id="statusText"></div>
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
     </section>
 
     <section class="panel">
@@ -401,9 +753,25 @@
       <div class="result-img-wrapper">
         <img id="resultImg" alt="" style="display:none;">
         <div class="result-placeholder" id="placeholder">
-          去水印结果会显示在这里。<br>
-          上传图片并框选水印后，点击右下角按钮开始。
+          <div class="empty-state">
+            <div class="empty-state-icon">🖼️</div>
+            <div class="empty-state-text">
+              去水印结果会显示在这里<br>
+              上传图片并框选水印后，点击按钮开始处理
+            </div>
+          </div>
         </div>
+        <div class="result-overlay" id="resultOverlay">
+          <img id="overlayImg" alt="">
+        </div>
+      </div>
+
+      <div class="result-controls">
+        <label class="compare-toggle">
+          <input type="checkbox" id="compareToggle">
+          <span>对比原图</span>
+        </label>
+        <button id="fullscreenBtn" class="secondary" type="button" style="padding: 6px 12px; font-size: 12px;" disabled>🔍 全屏查看</button>
       </div>
 
       <div class="meta-row">
@@ -412,8 +780,11 @@
           <span id="statusBadge">待上传图片</span>
         </div>
         <div class="btn-row">
-          <button id="downloadBtn" class="secondary" type="button" disabled>下载去水印图片</button>
-          <button id="runBtn" class="primary" type="button" disabled>开始去水印</button>
+          <button id="downloadBtn" class="secondary" type="button" disabled>📥 下载结果</button>
+          <button id="runBtn" class="primary" type="button" disabled>
+            <span id="runBtnText">🚀 开始去水印</span>
+            <span id="runBtnSpinner" class="loading-spinner" style="display: none; margin-left: 8px;"></span>
+          </button>
         </div>
       </div>
     </section>
@@ -424,22 +795,218 @@
   const fileInput = document.getElementById('fileInput');
   const canvas = document.getElementById('canvas');
   const canvasWrapper = document.getElementById('canvasWrapper');
+  const canvasContainer = document.getElementById('canvasContainer');
   const statusText = document.getElementById('statusText');
   const runBtn = document.getElementById('runBtn');
+  const runBtnText = document.getElementById('runBtnText');
+  const runBtnSpinner = document.getElementById('runBtnSpinner');
   const clearBtn = document.getElementById('clearBtn');
+  const clearImageBtn = document.getElementById('clearImageBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
   const resultImg = document.getElementById('resultImg');
   const placeholder = document.getElementById('placeholder');
   const downloadBtn = document.getElementById('downloadBtn');
   const statusBadge = document.getElementById('statusBadge');
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const zoomInBtn = document.getElementById('zoomInBtn');
+  const zoomOutBtn = document.getElementById('zoomOutBtn');
+  const zoomFitBtn = document.getElementById('zoomFitBtn');
+  const zoomLevel = document.getElementById('zoomLevel');
+  const boxList = document.getElementById('boxList');
+  const compareToggle = document.getElementById('compareToggle');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const resultOverlay = document.getElementById('resultOverlay');
+  const overlayImg = document.getElementById('overlayImg');
+  const imageSize = document.getElementById('imageSize');
+  const boxCount = document.getElementById('boxCount');
+  const fileSize = document.getElementById('fileSize');
 
   let originalImage = null;   // 原始 Image 对象
   let imageBlob = null;       // 原始文件 blob
   let boxes = [];             // 多个 [x1,y1,x2,y2]
+  let history = [];           // 历史记录
+  let historyIndex = -1;     // 当前历史索引
   let isDrawing = false;
   let startX = 0, startY = 0;
   let tempBox = null;
+  let selectedBoxIndex = -1;
+  let zoom = 1.0;
+  let originalCanvasWidth = 0;
+  let originalCanvasHeight = 0;
+  let resultImageUrl = null;  // 保存结果图片URL
 
   const ctx = canvas.getContext('2d');
+
+  // 工具函数
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icons = { success: '✓', error: '✕', info: 'ℹ' };
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || icons.info}</span>
+      <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+    toast.classList.add('show');
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
+  function saveHistory() {
+    history = history.slice(0, historyIndex + 1);
+    history.push(JSON.parse(JSON.stringify(boxes)));
+    historyIndex = history.length - 1;
+    if (history.length > 50) {
+      history.shift();
+      historyIndex--;
+    }
+    updateUndoRedoButtons();
+  }
+
+  function updateUndoRedoButtons() {
+    undoBtn.disabled = historyIndex <= 0;
+    redoBtn.disabled = historyIndex >= history.length - 1;
+  }
+
+  function undo() {
+    if (historyIndex > 0) {
+      historyIndex--;
+      boxes = JSON.parse(JSON.stringify(history[historyIndex]));
+      drawImageAndBoxes();
+      updateBoxList();
+      updateStats();
+      showToast('已撤销', 'success');
+    }
+  }
+
+  function redo() {
+    if (historyIndex < history.length - 1) {
+      historyIndex++;
+      boxes = JSON.parse(JSON.stringify(history[historyIndex]));
+      drawImageAndBoxes();
+      updateBoxList();
+      updateStats();
+      showToast('已重做', 'success');
+    }
+  }
+
+  function updateStats() {
+    if (originalImage) {
+      imageSize.textContent = `${originalImage.width} × ${originalImage.height}`;
+    }
+    boxCount.textContent = boxes.length;
+    if (imageBlob) {
+      fileSize.textContent = formatFileSize(imageBlob.size);
+    }
+  }
+
+  function updateBoxList() {
+    if (boxes.length === 0) {
+      boxList.classList.remove('has-boxes');
+      boxList.innerHTML = '';
+      return;
+    }
+    boxList.classList.add('has-boxes');
+    boxList.innerHTML = boxes.map((box, index) => {
+      const [x1, y1, x2, y2] = box;
+      const w = Math.round(x2 - x1);
+      const h = Math.round(y2 - y1);
+      return `
+        <div class="box-item" data-index="${index}">
+          <div class="box-item-info">
+            <span>区域 ${index + 1}</span>
+            <span style="color: var(--text-subtle);">${w} × ${h}px</span>
+          </div>
+          <button class="box-item-delete" data-index="${index}">删除</button>
+        </div>
+      `;
+    }).join('');
+    
+    boxList.querySelectorAll('.box-item-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = parseInt(btn.dataset.index);
+        boxes.splice(index, 1);
+        saveHistory();
+        drawImageAndBoxes();
+        updateBoxList();
+        updateStats();
+        showToast('已删除区域', 'success');
+      });
+    });
+
+    boxList.querySelectorAll('.box-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const index = parseInt(item.dataset.index);
+        selectedBoxIndex = index;
+        drawImageAndBoxes();
+      });
+    });
+  }
+
+  function setZoom(newZoom) {
+    zoom = Math.max(0.25, Math.min(3, newZoom));
+    zoomLevel.textContent = Math.round(zoom * 100) + '%';
+    updateCanvasDisplay();
+  }
+
+  function updateCanvasDisplay() {
+    if (!originalImage) return;
+    const containerWidth = canvasContainer.clientWidth;
+    const displayWidth = originalCanvasWidth * zoom;
+    const displayHeight = originalCanvasHeight * zoom;
+    
+    canvas.style.width = displayWidth + 'px';
+    canvas.style.height = displayHeight + 'px';
+  }
+
+  function zoomIn() {
+    setZoom(zoom * 1.2);
+  }
+
+  function zoomOut() {
+    setZoom(zoom / 1.2);
+  }
+
+  function zoomToFit() {
+    if (!originalImage) return;
+    // 等待容器尺寸确定，使用requestAnimationFrame确保DOM已渲染
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const containerWidth = canvasContainer.clientWidth - 20;
+        const containerHeight = canvasContainer.clientHeight - 20;
+        if (containerWidth > 0 && containerHeight > 0 && originalCanvasWidth > 0 && originalCanvasHeight > 0) {
+          const scaleX = containerWidth / originalCanvasWidth;
+          const scaleY = containerHeight / originalCanvasHeight;
+          setZoom(Math.min(scaleX, scaleY, 1));
+        }
+      }, 50);
+    });
+  }
+
+  // 窗口大小改变时，如果图片已加载，重新适应窗口
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (originalImage && zoom < 1.1) {
+        // 只有在接近适应窗口的缩放级别时才自动调整
+        zoomToFit();
+      }
+    }, 200);
+  });
 
   function setStatus(msg, type = '') {
     statusText.textContent = msg || '';
@@ -455,25 +1022,93 @@
     resultImg.src = '';
     placeholder.style.display = 'block';
     downloadBtn.disabled = true;
+    fullscreenBtn.disabled = true;
+    if (resultImageUrl) {
+      URL.revokeObjectURL(resultImageUrl);
+      resultImageUrl = null;
+    }
+    overlayImg.src = '';
+    compareToggle.checked = false;
+  }
+
+  function clearAll() {
+    // 清除图片和所有状态
+    originalImage = null;
+    imageBlob = null;
+    boxes = [];
+    history = [];
+    historyIndex = -1;
+    tempBox = null;
+    selectedBoxIndex = -1;
+    zoom = 1.0;
+    originalCanvasWidth = 0;
+    originalCanvasHeight = 0;
+    
+    // 清除文件输入
+    fileInput.value = '';
+    
+    // 隐藏canvas
+    canvasWrapper.style.display = 'none';
+    
+    // 重置结果
+    resetResult();
+    
+    // 重置按钮状态
+    runBtn.disabled = true;
+    clearBtn.disabled = true;
+    clearImageBtn.disabled = true;
+    undoBtn.disabled = true;
+    redoBtn.disabled = true;
+    
+    // 重置统计信息
+    imageSize.textContent = '-';
+    boxCount.textContent = '0';
+    fileSize.textContent = '-';
+    zoomLevel.textContent = '100%';
+    
+    // 清除区域列表
+    updateBoxList();
+    
+    // 重置状态
+    setStatus('', '');
+    setBadge('待上传图片');
+    
+    showToast('已清除所有内容', 'success');
   }
 
   function drawImageAndBoxes() {
     if (!originalImage) return;
     canvas.width = originalImage.width;
     canvas.height = originalImage.height;
+    originalCanvasWidth = originalImage.width;
+    originalCanvasHeight = originalImage.height;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(originalImage, 0, 0);
 
     // 画已经确认的矩形
     ctx.lineWidth = 2;
-    for (const b of boxes) {
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.95)';
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.16)';
+    boxes.forEach((b, index) => {
+      const isSelected = index === selectedBoxIndex;
+      ctx.strokeStyle = isSelected ? 'rgba(34, 197, 94, 0.95)' : 'rgba(56, 189, 248, 0.95)';
+      ctx.fillStyle = isSelected ? 'rgba(34, 197, 94, 0.2)' : 'rgba(56, 189, 248, 0.16)';
       const [x1, y1, x2, y2] = b;
       const w = x2 - x1;
       const h = y2 - y1;
       ctx.fillRect(x1, y1, w, h);
       ctx.strokeRect(x1 + 0.5, y1 + 0.5, w, h);
-    }
+      
+      // 绘制编号
+      ctx.fillStyle = isSelected ? '#22c55e' : '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(x1 + 9, y1 + 9, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0b1120';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((index + 1).toString(), x1 + 9, y1 + 9);
+    });
 
     // 当前正在拖拽的矩形
     if (tempBox) {
@@ -485,6 +1120,8 @@
       ctx.fillRect(x1, y1, w, h);
       ctx.strokeRect(x1 + 0.5, y1 + 0.5, w, h);
     }
+    
+    updateCanvasDisplay();
   }
 
   function loadImageFromFile(file) {
@@ -501,9 +1138,49 @@
     });
   }
 
+  // 拖拽上传支持
+  const uploadZone = document.querySelector('.upload-zone');
+  
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    uploadZone.addEventListener(eventName, preventDefaults, false);
+  });
+
+  function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    uploadZone.addEventListener(eventName, () => {
+      uploadZone.classList.add('drag-over');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    uploadZone.addEventListener(eventName, () => {
+      uploadZone.classList.remove('drag-over');
+    }, false);
+  });
+
+  uploadZone.addEventListener('drop', handleDrop, false);
+
+  function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files.length > 0) {
+      fileInput.files = files;
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
   fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('请上传图片文件', 'error');
+      return;
+    }
 
     setStatus('正在加载图片...', '');
     setBadge('加载图片中');
@@ -514,35 +1191,90 @@
       originalImage = img;
       imageBlob = file;
       boxes = [];
+      history = [[]];
+      historyIndex = 0;
       tempBox = null;
+      selectedBoxIndex = -1;
+      zoom = 1.0;
       canvasWrapper.style.display = 'block';
-      drawImageAndBoxes();
+      
+      // 等待DOM更新后再绘制和适应窗口
+      requestAnimationFrame(() => {
+        drawImageAndBoxes();
+        // 自动适应窗口
+        zoomToFit();
+      });
+      
       runBtn.disabled = false;
       clearBtn.disabled = false;
+      clearImageBtn.disabled = false;
+      updateUndoRedoButtons();
+      updateBoxList();
+      updateStats();
       setStatus('图片已加载，按住左键拖动进行框选（水印区域可多选）。', 'success');
       setBadge('已加载图片，等待框选');
+      showToast('图片加载成功', 'success');
     } catch (err) {
       console.error(err);
       setStatus('图片加载失败，请重试。', 'error');
       setBadge('加载失败');
+      showToast('图片加载失败', 'error');
     }
   });
 
   canvas.addEventListener('mousedown', (e) => {
     if (!originalImage) return;
-    isDrawing = true;
+    selectedBoxIndex = -1;
+    
+    // 检查是否点击在已有框内
     const rect = canvas.getBoundingClientRect();
-    startX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    startY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clickX = (e.clientX - rect.left) * scaleX;
+    const clickY = (e.clientY - rect.top) * scaleY;
+    
+    for (let i = boxes.length - 1; i >= 0; i--) {
+      const [x1, y1, x2, y2] = boxes[i];
+      if (clickX >= x1 && clickX <= x2 && clickY >= y1 && clickY <= y2) {
+        selectedBoxIndex = i;
+        drawImageAndBoxes();
+        return;
+      }
+    }
+    
+    isDrawing = true;
+    startX = clickX;
+    startY = clickY;
     tempBox = [startX, startY, startX, startY];
     drawImageAndBoxes();
   });
 
   canvas.addEventListener('mousemove', (e) => {
-    if (!isDrawing || !originalImage) return;
+    if (!originalImage) return;
+    if (!isDrawing) {
+      // 更新鼠标样式
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      const mouseY = (e.clientY - rect.top) * scaleY;
+      
+      let overBox = false;
+      for (const [x1, y1, x2, y2] of boxes) {
+        if (mouseX >= x1 && mouseX <= x2 && mouseY >= y1 && mouseY <= y2) {
+          overBox = true;
+          break;
+        }
+      }
+      canvas.style.cursor = overBox ? 'pointer' : 'crosshair';
+      return;
+    }
+    
     const rect = canvas.getBoundingClientRect();
-    const currentX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const currentY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const currentX = (e.clientX - rect.left) * scaleX;
+    const currentY = (e.clientY - rect.top) * scaleY;
     tempBox = [
       Math.min(startX, currentX),
       Math.min(startY, currentY),
@@ -559,12 +1291,17 @@
     // 过滤掉太小的框
     if (Math.abs(x2 - x1) > 4 && Math.abs(y2 - y1) > 4) {
       boxes.push([x1, y1, x2, y2]);
+      saveHistory();
+      updateBoxList();
+      updateStats();
       setStatus(`已添加矩形框，当前共 ${boxes.length} 个。`, 'success');
       setBadge(`已选择 ${boxes.length} 个区域`);
+      showToast(`已添加区域 ${boxes.length}`, 'success');
     } else {
       setStatus('矩形太小，已自动忽略。', 'error');
     }
     tempBox = null;
+    selectedBoxIndex = -1;
     drawImageAndBoxes();
   }
 
@@ -594,25 +1331,137 @@
   });
 
   clearBtn.addEventListener('click', () => {
+    if (boxes.length === 0) return;
     boxes = [];
+    saveHistory();
     tempBox = null;
+    selectedBoxIndex = -1;
     drawImageAndBoxes();
+    updateBoxList();
+    updateStats();
     setStatus('已清空所有矩形框。', '');
     setBadge('等待框选');
+    showToast('已清空所有区域', 'success');
+  });
+
+  // 清除图片按钮
+  clearImageBtn.addEventListener('click', () => {
+    if (!originalImage) return;
+    if (confirm('确定要清除当前图片和所有操作吗？')) {
+      clearAll();
+    }
+  });
+
+  // 键盘快捷键
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selectedBoxIndex >= 0 && selectedBoxIndex < boxes.length) {
+        boxes.splice(selectedBoxIndex, 1);
+        saveHistory();
+        selectedBoxIndex = -1;
+        drawImageAndBoxes();
+        updateBoxList();
+        updateStats();
+        showToast('已删除选中区域', 'success');
+      }
+    }
+  });
+
+  // 缩放控制
+  zoomInBtn.addEventListener('click', zoomIn);
+  zoomOutBtn.addEventListener('click', zoomOut);
+  zoomFitBtn.addEventListener('click', zoomToFit);
+
+  // 鼠标滚轮缩放
+  canvasContainer.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(zoom * delta);
+    }
+  }, { passive: false });
+
+  // 撤销/重做按钮
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+
+  // 下载按钮事件（在初始化时绑定）
+  downloadBtn.addEventListener('click', () => {
+    if (resultImageUrl) {
+      const a = document.createElement('a');
+      a.href = resultImageUrl;
+      a.download = `inpainted_${Date.now()}.png`;
+      a.click();
+      showToast('开始下载', 'success');
+    } else {
+      showToast('没有可下载的图片', 'error');
+    }
+  });
+
+  // 全屏查看按钮事件（在初始化时绑定）
+  fullscreenBtn.addEventListener('click', () => {
+    if (overlayImg.src && overlayImg.complete) {
+      resultOverlay.classList.add('active');
+      document.body.style.overflow = 'hidden'; // 防止背景滚动
+    } else if (resultImageUrl) {
+      overlayImg.src = resultImageUrl;
+      overlayImg.onload = () => {
+        resultOverlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      };
+    } else {
+      showToast('没有可查看的图片', 'error');
+    }
+  });
+
+  // 全屏查看关闭事件（点击遮罩关闭，点击图片不关闭）
+  resultOverlay.addEventListener('click', (e) => {
+    if (e.target === resultOverlay) {
+      resultOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  });
+  
+  // 点击图片不关闭
+  overlayImg.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  // ESC键关闭全屏
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && resultOverlay.classList.contains('active')) {
+      resultOverlay.classList.remove('active');
+      document.body.style.overflow = '';
+    }
   });
 
   runBtn.addEventListener('click', async () => {
     if (!imageBlob) {
       setStatus('请先上传图片。', 'error');
+      showToast('请先上传图片', 'error');
       return;
     }
     if (!boxes.length) {
       setStatus('请至少框选一个水印区域再开始。', 'error');
+      showToast('请至少框选一个区域', 'error');
       return;
     }
 
     runBtn.disabled = true;
     clearBtn.disabled = true;
+    clearImageBtn.disabled = true;
+    runBtnText.textContent = '处理中...';
+    runBtnSpinner.style.display = 'inline-block';
+    progressBar.classList.add('active');
+    progressFill.style.width = '30%';
     setStatus('正在调用 AI 去水印，这可能需要几秒钟...', '');
     setBadge('模型推理中...');
 
@@ -621,38 +1470,85 @@
       formData.append('file', imageBlob);
       formData.append('boxes', JSON.stringify(boxes));
 
+      progressFill.style.width = '60%';
+
       const resp = await fetch('/api/remove_watermark', {
         method: 'POST',
         body: formData,
       });
 
+      progressFill.style.width = '90%';
+
       if (!resp.ok) {
-        throw new Error('服务调用失败');
+        const errorText = await resp.text();
+        throw new Error(errorText || '服务调用失败');
       }
 
       const blob = await resp.blob();
+      progressFill.style.width = '100%';
+      
+      // 释放之前的URL
+      if (resultImageUrl) {
+        URL.revokeObjectURL(resultImageUrl);
+      }
+      
       const url = URL.createObjectURL(blob);
+      resultImageUrl = url;
       resultImg.src = url;
       resultImg.style.display = 'block';
       placeholder.style.display = 'none';
       downloadBtn.disabled = false;
-
-      downloadBtn.onclick = () => {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'inpainted.png';
-        a.click();
+      fullscreenBtn.disabled = false;
+      
+      // 确保overlayImg正确加载
+      overlayImg.onload = () => {
+        overlayImg.onload = null;
       };
+      overlayImg.onerror = () => {
+        console.error('Failed to load overlay image');
+        overlayImg.onerror = null;
+      };
+      overlayImg.src = url;
+
+      setTimeout(() => {
+        progressBar.classList.remove('active');
+        progressFill.style.width = '0%';
+      }, 500);
 
       setStatus('去水印完成，如有需要可调整框选区域后再次处理。', 'success');
       setBadge('去水印完成');
+      showToast('去水印完成！', 'success');
     } catch (err) {
       console.error(err);
       setStatus('去水印失败，请检查后端是否已启动，或稍后重试。', 'error');
       setBadge('处理失败');
+      showToast('处理失败：' + (err.message || '未知错误'), 'error');
+      progressBar.classList.remove('active');
+      progressFill.style.width = '0%';
     } finally {
       runBtn.disabled = false;
       clearBtn.disabled = false;
+      if (originalImage) {
+        clearImageBtn.disabled = false;
+      }
+      runBtnText.textContent = '🚀 开始去水印';
+      runBtnSpinner.style.display = 'none';
+    }
+  });
+
+  // 对比原图功能
+  compareToggle.addEventListener('change', (e) => {
+    if (e.target.checked && originalImage && resultImageUrl) {
+      // 保存当前结果图URL
+      if (!resultImg.dataset.originalSrc) {
+        resultImg.dataset.originalSrc = resultImg.src;
+      }
+      resultImg.src = originalImage.src;
+      showToast('显示原图', 'info');
+    } else if (resultImageUrl && !e.target.checked) {
+      // 恢复显示结果图
+      resultImg.src = resultImageUrl;
+      showToast('显示结果', 'info');
     }
   });
 </script>
