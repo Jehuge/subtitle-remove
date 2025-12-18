@@ -396,14 +396,7 @@ function App() {
 
   // 清除图片
   const clearImage = () => {
-    // 使用 window.confirm，如果失败则直接清除（在 Tauri 中可能 confirm 不工作）
-    try {
-      const confirmed = window.confirm('确定要清除当前图片和所有操作吗？');
-      if (!confirmed) return;
-    } catch (error) {
-      // 如果 confirm 失败，直接清除（可能是 Tauri 环境）
-      console.log('Confirm dialog not available, proceeding with clear');
-    }
+    console.log('[重置] 开始清除，当前 originalImage:', originalImage);
     
     // 清理内存中的 URL
     if (resultImageUrl && resultImageUrl.startsWith('blob:')) {
@@ -428,7 +421,21 @@ function App() {
       }
     }
     
-    // 清除所有状态
+    // 清除 canvas 先
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const width = canvas.width || 0;
+        const height = canvas.height || 0;
+        ctx.clearRect(0, 0, width, height);
+        canvas.width = 0;
+        canvas.height = 0;
+        console.log('[重置] Canvas 已清除');
+      }
+    }
+    
+    // 清除所有状态 - 批量更新
     setOriginalImage(null);
     setImageFile(null);
     setBoxes([]);
@@ -442,16 +449,13 @@ function App() {
     setStatusType('');
     setCompareMode(false);
     
-    // 清除 canvas
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
+    console.log('[重置] 所有状态已清除');
     
-    showToast('已清除所有内容', 'success');
+    // 使用 setTimeout 确保 UI 更新
+    setTimeout(() => {
+      showToast('已清除所有内容', 'success');
+      console.log('[重置] 重置完成');
+    }, 10);
   };
 
   // 清理内存中的 URL（当 URL 变化时清理旧的）
