@@ -6,10 +6,11 @@
     "dev": "cd front && npm run dev",
     "build": "cd front && npm run build",
     "preview": "cd front && npm run preview",
-    "tauri": "tauri --cwd tauri",
-    "tauri:dev": "tauri dev --cwd tauri",
-    "tauri:build": "tauri build --cwd tauri",
-    "install:front": "cd front && npm install"
+    "tauri": "export PATH=\"$HOME/.cargo/bin:$PATH\" && cd tauri && tauri",
+    "tauri:dev": "export PATH=\"$HOME/.cargo/bin:$PATH\" && cd tauri && tauri dev",
+    "tauri:build": "export PATH=\"$HOME/.cargo/bin:$PATH\" && cd tauri && tauri build",
+    "install:front": "cd front && npm install",
+    "front:dev": "cd front && npm run dev"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

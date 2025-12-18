@@ -11,7 +11,6 @@ interface Box {
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [boxes, setBoxes] = useState<Box[]>([]);
@@ -21,7 +20,6 @@ function App() {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [tempBox, setTempBox] = useState<Box | null>(null);
   const [selectedBoxIndex, setSelectedBoxIndex] = useState(-1);
-  const [zoom, setZoom] = useState(1.0);
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('');
@@ -42,34 +40,34 @@ function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(originalImage, 0, 0);
 
-    // 绘制已确认的框
-    ctx.lineWidth = 2;
+    // 绘制已确认的框 - 商务风格配色
+    ctx.lineWidth = 2.5;
     boxes.forEach((box, index) => {
       const isSelected = index === selectedBoxIndex;
-      ctx.strokeStyle = isSelected ? 'rgba(34, 197, 94, 0.95)' : 'rgba(56, 189, 248, 0.95)';
-      ctx.fillStyle = isSelected ? 'rgba(34, 197, 94, 0.2)' : 'rgba(56, 189, 248, 0.16)';
+      ctx.strokeStyle = isSelected ? 'rgba(217, 172, 83, 0.95)' : 'rgba(59, 130, 246, 0.9)';
+      ctx.fillStyle = isSelected ? 'rgba(217, 172, 83, 0.15)' : 'rgba(59, 130, 246, 0.12)';
       const { x1, y1, x2, y2 } = box;
       const w = x2 - x1;
       const h = y2 - y1;
       ctx.fillRect(x1, y1, w, h);
       ctx.strokeRect(x1 + 0.5, y1 + 0.5, w, h);
 
-      // 绘制编号
-      ctx.fillStyle = isSelected ? '#22c55e' : '#38bdf8';
+      // 绘制编号 - 商务风格
+      ctx.fillStyle = isSelected ? '#d9ac53' : '#3b82f6';
       ctx.beginPath();
-      ctx.arc(x1 + 9, y1 + 9, 9, 0, Math.PI * 2);
+      ctx.arc(x1 + 10, y1 + 10, 10, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#0b1120';
-      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText((index + 1).toString(), x1 + 9, y1 + 9);
+      ctx.fillText((index + 1).toString(), x1 + 10, y1 + 10);
     });
 
     // 绘制临时框
     if (tempBox) {
-      ctx.strokeStyle = 'rgba(248, 250, 252, 0.95)';
-      ctx.fillStyle = 'rgba(248, 250, 252, 0.12)';
+      ctx.strokeStyle = 'rgba(217, 172, 83, 0.8)';
+      ctx.fillStyle = 'rgba(217, 172, 83, 0.1)';
       const { x1, y1, x2, y2 } = tempBox;
       const w = x2 - x1;
       const h = y2 - y1;
@@ -141,7 +139,6 @@ function App() {
             setHistoryIndex(0);
             setTempBox(null);
             setSelectedBoxIndex(-1);
-            setZoom(1.0);
             setResultImageUrl(null);
             showToast('图片加载成功', 'success');
           };
@@ -189,7 +186,7 @@ function App() {
 
     setIsDrawing(true);
     setStartPos(coords);
-    setTempBox({ ...coords, x2: coords.x, y2: coords.y });
+    setTempBox({ x1: coords.x, y1: coords.y, x2: coords.x, y2: coords.y });
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -256,30 +253,39 @@ function App() {
         try {
           const base64 = e.target?.result as string;
           
+          console.log('[前端] 开始调用 Tauri 命令 remove_watermark');
+          console.log('[前端] 图片大小:', base64.length, '字符');
+          console.log('[前端] 框选区域数量:', boxes.length);
+          
           // 调用 Tauri 命令，通过 Sidecar 启动 Python 后端
           const result = await invoke<string>('remove_watermark', {
             imageData: base64,
             boxes: boxes.map(b => [b.x1, b.y1, b.x2, b.y2]),
           });
 
+          console.log('[前端] 收到结果，长度:', result.length);
+          
           // result 是 base64 编码的图片
           setResultImageUrl(result);
           showToast('去水印完成！', 'success');
           setIsProcessing(false);
-        } catch (error) {
-          console.error('Error removing watermark:', error);
-          showToast('处理失败：' + (error as Error).message, 'error');
+        } catch (error: any) {
+          console.error('[前端] 调用 Tauri 命令失败:', error);
+          const errorMessage = error?.message || error?.toString() || '未知错误';
+          console.error('[前端] 详细错误信息:', JSON.stringify(error, null, 2));
+          showToast('处理失败：' + errorMessage, 'error');
           setIsProcessing(false);
         }
       };
       reader.onerror = () => {
+        console.error('[前端] 读取图片文件失败');
         showToast('读取图片失败', 'error');
         setIsProcessing(false);
       };
       reader.readAsDataURL(imageFile);
-    } catch (error) {
-      console.error('Error removing watermark:', error);
-      showToast('处理失败：' + (error as Error).message, 'error');
+    } catch (error: any) {
+      console.error('[前端] 处理去水印时发生错误:', error);
+      showToast('处理失败：' + (error?.message || '未知错误'), 'error');
       setIsProcessing(false);
     }
   };
@@ -291,8 +297,6 @@ function App() {
     try {
       const response = await fetch(resultImageUrl);
       const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
-      const data = Array.from(new Uint8Array(arrayBuffer));
       
       // 使用浏览器下载
       const url = URL.createObjectURL(blob);
@@ -330,7 +334,6 @@ function App() {
       setHistoryIndex(0);
       setTempBox(null);
       setSelectedBoxIndex(-1);
-      setZoom(1.0);
       setResultImageUrl(null);
       showToast('已清除所有内容', 'success');
     }
@@ -363,176 +366,276 @@ function App() {
   }, [selectedBoxIndex, boxes, historyIndex, history]);
 
   return (
-    <div className="card">
-      <div className="header">
-        <div className="title-block">
-          <h1>
-            AI 图片去水印
-            <span className="title-chip">LaMa Inpainting</span>
-          </h1>
-          <p>上传图片 → 框选固定水印区域 → AI 自动填充去除 → 预览与下载。</p>
-          <div className="tag-row">
-            <span className="tag"><span className="pill-dot"></span>基于 big-lama，高质量图片修复</span>
-            <span className="tag">手动框选 · 精准控制去除区域</span>
+    <div className="app-container">
+      {/* 顶部导航栏 */}
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo-section">
+            <div className="logo-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 9h6v6H9z" />
+              </svg>
+            </div>
+            <div className="logo-text">
+              <h1 className="app-title">专业图片去水印</h1>
+              <p className="app-subtitle">AI 智能水印去除系统</p>
+            </div>
+          </div>
+          <div className="header-badge">
+            <span className="badge-dot"></span>
+            <span>LaMa 技术</span>
           </div>
         </div>
-        <div className="badge">
-          <span>✨</span>
-          高质量去水印
-        </div>
-      </div>
+      </header>
 
-      <div className="main">
-        <section className="panel">
+      {/* 主内容区 */}
+      <main className="app-main">
+        {/* 左侧：源图片编辑区 */}
+        <section className="workspace-panel">
           <div className="panel-header">
-            <div className="panel-title">源图片 & 框选水印</div>
-            <div className="hint">点击上传，按住鼠标拖动框选水印，可多选</div>
-          </div>
-
-          <div className="upload-zone" onClick={handleFileSelect}>
-            <div className="upload-icon">↑</div>
-            <div className="upload-text-main">点击或拖入图片文件</div>
-            <div className="upload-text-sub">支持 JPG / PNG，分辨率越高效果越好</div>
-          </div>
-
-          {originalImage && (
-            <div className="canvas-wrapper">
-              <div className="canvas-container">
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                />
+            <div className="panel-title-group">
+              <h2 className="panel-title">源图片编辑</h2>
+              <span className="panel-subtitle">框选需要去除的水印区域</span>
+            </div>
+            <div className="panel-stats">
+              <div className="stat-badge">
+                <span className="stat-label">已选区域</span>
+                <span className="stat-value">{boxes.length}</span>
               </div>
             </div>
-          )}
+          </div>
 
-          <div className="toolbar">
-            <div>
-              <div>提示：可拖多次添加多个矩形框，右键或双击空白区域取消当前操作。</div>
-              <div className="keyboard-hint">
-                快捷键：<kbd>Ctrl+Z</kbd>撤销 <kbd>Ctrl+Y</kbd>重做 <kbd>Delete</kbd>删除选中
+          <div className="panel-content">
+            {!originalImage ? (
+              <div className="upload-area" onClick={handleFileSelect}>
+                <div className="upload-icon-wrapper">
+                  <svg className="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                  </svg>
+                </div>
+                <div className="upload-text">
+                  <p className="upload-primary">点击上传图片</p>
+                  <p className="upload-secondary">支持 JPG、PNG 格式 • 建议使用高分辨率图片</p>
+                </div>
               </div>
-            </div>
-            <div className="btn-row">
-              <div className="undo-redo-btns">
-                <button
-                  className="secondary"
-                  onClick={undo}
-                  disabled={historyIndex <= 0}
-                >
-                  ↶ 撤销
-                </button>
-                <button
-                  className="secondary"
-                  onClick={redo}
-                  disabled={historyIndex >= history.length - 1}
-                >
-                  ↷ 重做
-                </button>
-              </div>
-              <button className="secondary" onClick={clearBoxes} disabled={boxes.length === 0}>
-                清空所有框
-              </button>
-              <button
-                className="secondary"
-                onClick={clearImage}
-                disabled={!originalImage}
-                style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}
-              >
-                🗑️ 清除图片
-              </button>
-            </div>
-          </div>
-
-          <div className="stats-info">
-            <div className="stat-item">
-              <span>图片尺寸：</span>
-              <span className="stat-value">
-                {originalImage ? `${originalImage.width} × ${originalImage.height}` : '-'}
-              </span>
-            </div>
-            <div className="stat-item">
-              <span>已选区域：</span>
-              <span className="stat-value">{boxes.length}</span>
-            </div>
-            <div className="stat-item">
-              <span>文件大小：</span>
-              <span className="stat-value">
-                {imageFile ? `${(imageFile.size / 1024).toFixed(2)} KB` : '-'}
-              </span>
-            </div>
-          </div>
-
-          <div className={`status ${statusType}`}>{status}</div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-header">
-            <div className="panel-title">AI 去水印结果</div>
-            <div className="hint">点击"开始去水印"，稍等几秒钟查看效果</div>
-          </div>
-
-          <div className="result-img-wrapper">
-            {resultImageUrl ? (
-              <img
-                src={compareMode && originalImage ? originalImage.src : resultImageUrl}
-                alt="去水印结果"
-                style={{ display: 'block' }}
-              />
             ) : (
-              <div className="result-placeholder">
-                <div className="empty-state">
-                  <div className="empty-state-icon">🖼️</div>
-                  <div className="empty-state-text">
-                    去水印结果会显示在这里<br />
-                    上传图片并框选水印后，点击按钮开始处理
-                  </div>
+              <div className="canvas-viewport">
+                <div className="canvas-container">
+                  <canvas
+                    ref={canvasRef}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                  />
                 </div>
               </div>
             )}
-          </div>
 
-          <div className="result-controls">
-            <label className="compare-toggle">
-              <input
-                type="checkbox"
-                checked={compareMode}
-                onChange={(e) => setCompareMode(e.target.checked)}
-              />
-              <span>对比原图</span>
-            </label>
-          </div>
+            {originalImage && (
+              <div className="toolbar-section">
+                <div className="toolbar-group">
+                  <button
+                    className="toolbar-btn"
+                    onClick={undo}
+                    disabled={historyIndex <= 0}
+                    title="撤销 (Ctrl+Z)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 7v6h6" />
+                      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                    </svg>
+                    <span>撤销</span>
+                  </button>
+                  <button
+                    className="toolbar-btn"
+                    onClick={redo}
+                    disabled={historyIndex >= history.length - 1}
+                    title="重做 (Ctrl+Y)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 7v6h-6" />
+                      <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+                    </svg>
+                    <span>重做</span>
+                  </button>
+                </div>
+                <div className="toolbar-group">
+                  <button
+                    className="toolbar-btn secondary"
+                    onClick={clearBoxes}
+                    disabled={boxes.length === 0}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    <span>清空所有</span>
+                  </button>
+                  <button
+                    className="toolbar-btn danger"
+                    onClick={clearImage}
+                    disabled={!originalImage}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    <span>重置</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
-          <div className="meta-row">
-            <div className="pill">
-              当前状态：
-              <span>{isProcessing ? '处理中...' : resultImageUrl ? '去水印完成' : '待上传图片'}</span>
+            {originalImage && (
+              <div className="image-info">
+                <div className="info-item">
+                  <span className="info-label">图片尺寸</span>
+                  <span className="info-value">{originalImage.width} × {originalImage.height}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">文件大小</span>
+                  <span className="info-value">{imageFile ? `${(imageFile.size / 1024).toFixed(1)} KB` : '-'}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">已选区域</span>
+                  <span className="info-value highlight">{boxes.length}</span>
+                </div>
+              </div>
+            )}
+
+            {status && (
+              <div className={`status-message ${statusType}`}>
+                <span>{status}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* 右侧：结果预览区 */}
+        <section className="preview-panel">
+          <div className="panel-header">
+            <div className="panel-title-group">
+              <h2 className="panel-title">处理结果</h2>
+              <span className="panel-subtitle">AI 生成的结果预览</span>
             </div>
-            <div className="btn-row">
-              <button
-                className="secondary"
-                onClick={handleDownload}
-                disabled={!resultImageUrl}
-              >
-                📥 下载结果
-              </button>
-              <button
-                className="primary"
-                onClick={handleRemoveWatermark}
-                disabled={!imageFile || boxes.length === 0 || isProcessing}
-              >
-                {isProcessing ? '处理中...' : '🚀 开始去水印'}
-              </button>
+            <div className="panel-actions">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={compareMode}
+                  onChange={(e) => setCompareMode(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-label">对比原图</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="panel-content">
+            <div className="preview-container">
+              {resultImageUrl ? (
+                <div className="preview-image-wrapper">
+                  <img
+                    src={compareMode && originalImage ? originalImage.src : resultImageUrl}
+                    alt="Processed result"
+                    className="preview-image"
+                  />
+                  {compareMode && (
+                    <div className="compare-overlay">
+                      <span>原图</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="preview-placeholder">
+                  <div className="placeholder-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                  </div>
+                  <p className="placeholder-text">处理结果将显示在这里</p>
+                  <p className="placeholder-hint">上传图片并框选区域后开始处理</p>
+                </div>
+              )}
+            </div>
+
+            <div className="action-section">
+              <div className="status-indicator">
+                <div className={`status-dot ${isProcessing ? 'processing' : resultImageUrl ? 'success' : 'idle'}`}></div>
+                <span className="status-text">
+                  {isProcessing ? '处理中...' : resultImageUrl ? '已完成' : '就绪'}
+                </span>
+              </div>
+              <div className="action-buttons">
+                <button
+                  className="action-btn secondary"
+                  onClick={handleDownload}
+                  disabled={!resultImageUrl}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  <span>下载</span>
+                </button>
+                <button
+                  className="action-btn primary"
+                  onClick={handleRemoveWatermark}
+                  disabled={!imageFile || boxes.length === 0 || isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <svg className="spinner" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="32" strokeDashoffset="32">
+                          <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite" />
+                          <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite" />
+                        </circle>
+                      </svg>
+                      <span>处理中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                      <span>开始处理</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </section>
-      </div>
+      </main>
+
+      {/* 底部提示栏 */}
+      <footer className="app-footer">
+        <div className="footer-content">
+          <div className="shortcut-hints">
+            <span className="hint-item">
+              <kbd>Ctrl</kbd> + <kbd>Z</kbd> 撤销
+            </span>
+            <span className="hint-item">
+              <kbd>Ctrl</kbd> + <kbd>Y</kbd> 重做
+            </span>
+            <span className="hint-item">
+              <kbd>Delete</kbd> 删除选中
+            </span>
+          </div>
+          <div className="footer-info">
+            <span>基于 Big-LaMa 图像修复技术</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
 export default App;
-

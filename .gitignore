@@ -1,33 +1,36 @@
-# Logs
-logs
-*.log
+# ============================================
+# 依赖和包管理
+# ============================================
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-node_modules
-dist
-dist-ssr
+# ============================================
+# 构建产物
+# ============================================
+dist/
+dist-ssr/
+build/
 *.local
+*.tsbuildinfo
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# ============================================
+# Rust / Cargo (Tauri)
+# ============================================
+tauri/target/
+tauri/Cargo.lock
+**/*.rs.bk
+*.pdb
 
-# Tauri
-src-tauri/target
-src-tauri/Cargo.lock
-
+# ============================================
 # Python
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -37,14 +40,114 @@ venv/
 env/
 ENV/
 .venv
+*.egg-info/
+.eggs/
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
 
-# IDE
+# ============================================
+# 日志文件
+# ============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================
+# 操作系统文件
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================================
+# IDE 和编辑器
+# ============================================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 .idea/
-.vscode/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+.project
+.classpath
+.settings/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# OS
-.DS_Store
-Thumbs.db
+# ============================================
+# 环境变量和配置
+# ============================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+
+# ============================================
+# 测试和覆盖率
+# ============================================
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
+# ============================================
+# 临时文件和缓存
+# ============================================
+*.tmp
+*.temp
+*.cache
+.cache/
+.temp/
+.tmp/
+*.bak
+*.swp
+*.swo
+
+# ============================================
+# 模型文件（如果很大，可以选择性忽略）
+# ============================================
+# python/models/**/*.pt
+# python/models/**/*.pth
+# python/models/**/*.onnx
+
+# ============================================
+# Tauri 特定
+# ============================================
+tauri/gen/
+tauri/target/
+
+# ============================================
+# 其他
+# ============================================
+*.zip
+*.tar.gz
+*.rar
+.directory
+.Trash-*
