@@ -131,11 +131,15 @@ coverage/
 *.swo
 
 # ============================================
-# 模型文件（如果很大，可以选择性忽略）
+# 模型文件（大文件，不应提交到 Git）
 # ============================================
-# python/models/**/*.pt
-# python/models/**/*.pth
-# python/models/**/*.onnx
+python/models/**/*.pt
+python/models/**/*.pth
+python/models/**/*.onnx
+python/models/**/*.yaml
+python/models/**/*.csv
+# 但保留目录结构
+!python/models/.gitkeep
 
 # ============================================
 # Tauri 特定
