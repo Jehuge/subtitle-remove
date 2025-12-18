@@ -139,6 +139,138 @@ async fn remove_watermark(
 }
 
 #[command]
+async fn convert_image(
+    app: tauri::AppHandle,
+    image_data: String,
+    target_format: String,
+    quality: Option<u8>,
+    compression_level: Option<u8>,
+    quantize: Option<bool>,
+) -> Result<String, String> {
+    // 获取资源目录（python 目录）
+    let backend_dir = if cfg!(debug_assertions) {
+        let mut found = std::env::current_dir()
+            .ok()
+            .and_then(|p| {
+                let python_dir = p.join("python");
+                if python_dir.exists() {
+                    Some(python_dir)
+                } else if p.ends_with("tauri") {
+                    p.parent().map(|p| p.join("python"))
+                } else {
+                    let mut current = p.clone();
+                    for _ in 0..3 {
+                        let python_dir = current.join("python");
+                        if python_dir.exists() {
+                            return Some(python_dir);
+                        }
+                        if let Some(parent) = current.parent() {
+                            current = parent.to_path_buf();
+                        } else {
+                            break;
+                        }
+                    }
+                    None
+                }
+            });
+        
+        if found.is_none() {
+            found = app.path()
+                .resource_dir()
+                .ok()
+                .map(|r| r.join("python"));
+        }
+        
+        if found.is_none() {
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    let mut current = exe_dir.to_path_buf();
+                    for _ in 0..5 {
+                        let python_dir = current.join("python");
+                        if python_dir.exists() {
+                            found = Some(python_dir);
+                            break;
+                        }
+                        if let Some(parent) = current.parent() {
+                            current = parent.to_path_buf();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        found.ok_or("无法获取 python 目录，请确保 python/ 目录存在")?
+    } else {
+        app.path()
+            .resource_dir()
+            .map_err(|e| format!("无法获取资源目录: {}", e))?
+            .join("python")
+    };
+    
+    let script_path = backend_dir.join("convert_image_cli.py");
+    
+    eprintln!("[DEBUG] 后端目录: {}", backend_dir.display());
+    eprintln!("[DEBUG] 脚本路径: {}", script_path.display());
+    
+    if !script_path.exists() {
+        return Err(format!("Python 脚本不存在: {}。请确保 python/convert_image_cli.py 文件存在", script_path.display()));
+    }
+    
+    // 准备输入 JSON
+    let mut input_json = serde_json::json!({
+        "image_data": image_data,
+        "target_format": target_format
+    });
+    
+    if let Some(q) = quality {
+        input_json["quality"] = serde_json::Value::Number(q.into());
+    }
+    if let Some(c) = compression_level {
+        input_json["compression_level"] = serde_json::Value::Number(c.into());
+    }
+    if let Some(quant) = quantize {
+        input_json["quantize"] = serde_json::Value::Bool(quant);
+    }
+    
+    let input_str = serde_json::to_string(&input_json)
+        .map_err(|e| format!("序列化输入失败: {}", e))?;
+    
+    eprintln!("[DEBUG] 执行 Python 脚本: {}", script_path.display());
+    eprintln!("[DEBUG] 工作目录: {}", backend_dir.display());
+    
+    let mut child = Command::new("python3")
+        .arg(script_path.to_str().unwrap())
+        .current_dir(&backend_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("启动 Python 进程失败: {}。请确保已安装 Python 3 并且 python3 命令可用", e))?;
+    
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(input_str.as_bytes())
+            .map_err(|e| format!("写入输入数据失败: {}", e))?;
+        stdin.flush()
+            .map_err(|e| format!("刷新输入数据失败: {}", e))?;
+    }
+    
+    let output = child.wait_with_output()
+        .map_err(|e| format!("执行 Python 脚本失败: {}", e))?;
+    
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Python 脚本执行失败: {}", error));
+    }
+    
+    let result = String::from_utf8(output.stdout)
+        .map_err(|e| format!("读取输出失败: {}", e))?;
+    
+    Ok(result.trim().to_string())
+}
+
+#[command]
 async fn save_file(path: String, data: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, data)
         .map_err(|e| format!("保存文件失败: {}", e))?;
@@ -147,7 +279,7 @@ async fn save_file(path: String, data: Vec<u8>) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![remove_watermark, save_file])
+        .invoke_handler(tauri::generate_handler![remove_watermark, convert_image, save_file])
         .setup(|_app| {
             Ok(())
         })

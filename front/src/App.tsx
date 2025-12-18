@@ -9,7 +9,10 @@ interface Box {
   y2: number;
 }
 
+type TabType = 'watermark' | 'convert';
+
 function App() {
+  const [activeTab, setActiveTab] = useState<TabType>('watermark');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -25,6 +28,18 @@ function App() {
   const [status, setStatus] = useState('');
   const [statusType, setStatusType] = useState<'success' | 'error' | ''>('');
   const [compareMode, setCompareMode] = useState(false);
+
+  // 图片转换相关状态
+  const [convertImageFile, setConvertImageFile] = useState<File | null>(null);
+  const [convertImageUrl, setConvertImageUrl] = useState<string | null>(null);
+  const [targetFormat, setTargetFormat] = useState<'jpg' | 'png' | 'webp'>('jpg');
+  const [quality, setQuality] = useState(85);
+  const [compressionLevel, setCompressionLevel] = useState(9);
+  const [quantizeColors, setQuantizeColors] = useState(false);
+  const [convertResultUrl, setConvertResultUrl] = useState<string | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const [originalSize, setOriginalSize] = useState(0);
+  const [convertedSize, setConvertedSize] = useState(0);
 
   // 绘制图片和框
   const drawImageAndBoxes = () => {
@@ -77,7 +92,20 @@ function App() {
   };
 
   useEffect(() => {
-    drawImageAndBoxes();
+    if (originalImage) {
+      drawImageAndBoxes();
+    } else {
+      // 如果没有图片，清除 canvas
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.width = 0;
+          canvas.height = 0;
+        }
+      }
+    }
   }, [originalImage, boxes, tempBox, selectedBoxIndex]);
 
   // 保存历史记录
@@ -121,16 +149,50 @@ function App() {
   // 加载图片
   const handleFileSelect = async () => {
     try {
+      // 创建文件输入元素
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
-      input.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
+      input.style.display = 'none';
+      
+      // 使用 Promise 包装文件选择
+      const filePromise = new Promise<File | null>((resolve) => {
+        input.onchange = (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0] || null;
+          resolve(file);
+          // 清理
+          document.body.removeChild(input);
+        };
         
-        const reader = new FileReader();
-        reader.onload = (e) => {
+        input.oncancel = () => {
+          resolve(null);
+          document.body.removeChild(input);
+        };
+      });
+      
+      // 添加到 DOM 并触发点击
+      document.body.appendChild(input);
+      input.click();
+      
+      // 等待文件选择
+      const file = await filePromise;
+      if (!file) return;
+      
+      // 读取文件
+      const reader = new FileReader();
+      reader.onerror = () => {
+        console.error('文件读取失败');
+        showToast('文件读取失败', 'error');
+      };
+      
+      reader.onload = (e) => {
+        try {
           const img = new Image();
+          img.onerror = () => {
+            console.error('图片加载失败');
+            showToast('图片格式不支持或已损坏', 'error');
+          };
+          
           img.onload = () => {
             setOriginalImage(img);
             setImageFile(file);
@@ -142,14 +204,18 @@ function App() {
             setResultImageUrl(null);
             showToast('图片加载成功', 'success');
           };
+          
           img.src = e.target?.result as string;
-        };
-        reader.readAsDataURL(file);
+        } catch (error) {
+          console.error('图片处理错误:', error);
+          showToast('图片处理失败', 'error');
+        }
       };
-      input.click();
+      
+      reader.readAsDataURL(file);
     } catch (error) {
       console.error('Error selecting file:', error);
-      showToast('文件选择失败', 'error');
+      showToast('文件选择失败: ' + (error instanceof Error ? error.message : '未知错误'), 'error');
     }
   };
 
@@ -306,9 +372,13 @@ function App() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
       
-      showToast('开始下载', 'success');
+      // 延迟清理 URL，确保下载开始
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      showToast('下载成功！文件已保存到下载文件夹', 'success');
     } catch (error) {
       console.error('Error downloading:', error);
       showToast('下载失败', 'error');
@@ -326,18 +396,106 @@ function App() {
 
   // 清除图片
   const clearImage = () => {
-    if (confirm('确定要清除当前图片和所有操作吗？')) {
-      setOriginalImage(null);
-      setImageFile(null);
-      setBoxes([]);
-      setHistory([[]]);
-      setHistoryIndex(0);
-      setTempBox(null);
-      setSelectedBoxIndex(-1);
-      setResultImageUrl(null);
-      showToast('已清除所有内容', 'success');
+    // 使用 window.confirm，如果失败则直接清除（在 Tauri 中可能 confirm 不工作）
+    try {
+      const confirmed = window.confirm('确定要清除当前图片和所有操作吗？');
+      if (!confirmed) return;
+    } catch (error) {
+      // 如果 confirm 失败，直接清除（可能是 Tauri 环境）
+      console.log('Confirm dialog not available, proceeding with clear');
     }
+    
+    // 清理内存中的 URL
+    if (resultImageUrl && resultImageUrl.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(resultImageUrl);
+      } catch (e) {
+        console.warn('Failed to revoke resultImageUrl:', e);
+      }
+    }
+    if (convertResultUrl && convertResultUrl.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(convertResultUrl);
+      } catch (e) {
+        console.warn('Failed to revoke convertResultUrl:', e);
+      }
+    }
+    if (convertImageUrl && convertImageUrl.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(convertImageUrl);
+      } catch (e) {
+        console.warn('Failed to revoke convertImageUrl:', e);
+      }
+    }
+    
+    // 清除所有状态
+    setOriginalImage(null);
+    setImageFile(null);
+    setBoxes([]);
+    setHistory([[]]);
+    setHistoryIndex(0);
+    setTempBox(null);
+    setSelectedBoxIndex(-1);
+    setResultImageUrl(null);
+    setIsProcessing(false);
+    setStatus('');
+    setStatusType('');
+    setCompareMode(false);
+    
+    // 清除 canvas
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+    
+    showToast('已清除所有内容', 'success');
   };
+
+  // 清理内存中的 URL（当 URL 变化时清理旧的）
+  useEffect(() => {
+    return () => {
+      // 组件卸载时清理所有 blob URL
+      if (resultImageUrl && resultImageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(resultImageUrl);
+      }
+      if (convertResultUrl && convertResultUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(convertResultUrl);
+      }
+      if (convertImageUrl && convertImageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(convertImageUrl);
+      }
+    };
+  }, []);
+
+  // 当 resultImageUrl 变化时，清理旧的 URL
+  useEffect(() => {
+    return () => {
+      if (resultImageUrl && resultImageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(resultImageUrl);
+      }
+    };
+  }, [resultImageUrl]);
+
+  // 当 convertResultUrl 变化时，清理旧的 URL
+  useEffect(() => {
+    return () => {
+      if (convertResultUrl && convertResultUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(convertResultUrl);
+      }
+    };
+  }, [convertResultUrl]);
+
+  // 当 convertImageUrl 变化时，清理旧的 URL
+  useEffect(() => {
+    return () => {
+      if (convertImageUrl && convertImageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(convertImageUrl);
+      }
+    };
+  }, [convertImageUrl]);
 
   // 键盘快捷键
   useEffect(() => {
@@ -372,14 +530,22 @@ function App() {
         <div className="header-content">
           <div className="logo-section">
             <div className="logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M9 9h6v6H9z" />
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* 水滴形状 - 代表图片/水 */}
+                <path d="M12 2C8 2 5 5.5 5 9.5c0 3.5 2.5 6.5 7 10.5 4.5-4 7-7 7-10.5 0-4-3-7.5-7-7.5z" fill="currentColor" opacity="0.95"/>
+                {/* 橡皮擦 - 代表去除 */}
+                <g transform="translate(14, 13)">
+                  <rect x="0" y="0" width="5" height="2.5" rx="0.5" fill="#ffffff" transform="rotate(45 2.5 1.25)"/>
+                  {/* 被擦除的颗粒 */}
+                  <circle cx="1.5" cy="1.5" r="0.4" fill="#1e293b" opacity="0.4"/>
+                  <circle cx="2.8" cy="2.2" r="0.3" fill="#1e293b" opacity="0.3"/>
+                  <circle cx="3.5" cy="1" r="0.35" fill="#1e293b" opacity="0.35"/>
+                </g>
               </svg>
             </div>
             <div className="logo-text">
-              <h1 className="app-title">专业图片去水印</h1>
-              <p className="app-subtitle">AI 智能水印去除系统</p>
+              <h1 className="app-title">专业图片工具</h1>
+              <p className="app-subtitle">AI 智能图片处理系统</p>
             </div>
           </div>
           <div className="header-badge">
@@ -387,12 +553,42 @@ function App() {
             <span>LaMa 技术</span>
           </div>
         </div>
+        {/* 标签导航栏 */}
+        <div className="tab-navigation">
+          <button
+            className={`tab-button ${activeTab === 'watermark' ? 'active' : ''}`}
+            onClick={() => setActiveTab('watermark')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C8 2 5 5.5 5 9.5c0 3.5 2.5 6.5 7 10.5 4.5-4 7-7 7-10.5 0-4-3-7.5-7-7.5z" fill="currentColor" opacity="0.9"/>
+              <g transform="translate(14, 13)">
+                <rect x="0" y="0" width="5" height="2.5" rx="0.5" fill="#ffffff" transform="rotate(45 2.5 1.25)"/>
+                <circle cx="1.5" cy="1.5" r="0.4" fill="currentColor" opacity="0.3"/>
+                <circle cx="2.8" cy="2.2" r="0.3" fill="currentColor" opacity="0.2"/>
+              </g>
+            </svg>
+            <span>水印去除</span>
+          </button>
+          <button
+            className={`tab-button ${activeTab === 'convert' ? 'active' : ''}`}
+            onClick={() => setActiveTab('convert')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span>格式转换和压缩</span>
+          </button>
+        </div>
       </header>
 
       {/* 主内容区 */}
       <main className="app-main">
-        {/* 左侧：源图片编辑区 */}
-        <section className="workspace-panel">
+        {activeTab === 'watermark' ? (
+          <>
+            {/* 左侧：源图片编辑区 */}
+            <section className="workspace-panel">
           <div className="panel-header">
             <div className="panel-title-group">
               <h2 className="panel-title">源图片编辑</h2>
@@ -613,6 +809,396 @@ function App() {
             </div>
           </div>
         </section>
+          </>
+        ) : (
+          <>
+            {/* 图片格式转换和压缩 */}
+            <section className="workspace-panel convert-panel">
+              <div className="panel-header">
+                <div className="panel-title-group">
+                  <h2 className="panel-title">图片上传</h2>
+                  <span className="panel-subtitle">选择要转换和压缩的图片</span>
+                </div>
+              </div>
+              <div className="panel-content">
+                {!convertImageUrl ? (
+                  <div className="upload-area" onClick={async () => {
+                    try {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.style.display = 'none';
+                      
+                      const filePromise = new Promise<File | null>((resolve) => {
+                        input.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0] || null;
+                          resolve(file);
+                          document.body.removeChild(input);
+                        };
+                        input.oncancel = () => {
+                          resolve(null);
+                          document.body.removeChild(input);
+                        };
+                      });
+                      
+                      document.body.appendChild(input);
+                      input.click();
+                      
+                      const file = await filePromise;
+                      if (!file) return;
+                      
+                      setConvertImageFile(file);
+                      setOriginalSize(file.size);
+                      
+                      const reader = new FileReader();
+                      reader.onerror = () => {
+                        console.error('文件读取失败');
+                        showToast('文件读取失败', 'error');
+                      };
+                      reader.onload = (e) => {
+                        try {
+                          setConvertImageUrl(e.target?.result as string);
+                          showToast('图片加载成功', 'success');
+                        } catch (error) {
+                          console.error('图片处理错误:', error);
+                          showToast('图片处理失败', 'error');
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    } catch (error) {
+                      console.error('文件选择错误:', error);
+                      showToast('文件选择失败: ' + (error instanceof Error ? error.message : '未知错误'), 'error');
+                    }
+                  }}>
+                    <div className="upload-icon-wrapper">
+                      <svg className="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                    </div>
+                    <div className="upload-text">
+                      <p className="upload-primary">点击上传图片</p>
+                      <p className="upload-secondary">支持 JPG、PNG、WebP 等格式</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="convert-image-preview">
+                      <img src={convertImageUrl} alt="Original" className="preview-image" />
+                    </div>
+                    <div className="convert-settings">
+                      <div className="setting-group">
+                        <label className="setting-label">目标格式</label>
+                        <div className="format-buttons">
+                          {(['jpg', 'png', 'webp'] as const).map((format) => (
+                            <button
+                              key={format}
+                              className={`format-btn ${targetFormat === format ? 'active' : ''}`}
+                              onClick={() => setTargetFormat(format)}
+                            >
+                              {format.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {targetFormat === 'jpg' && (
+                        <div className="setting-group">
+                          <label className="setting-label">质量: {quality}%</label>
+                          <input
+                            type="range"
+                            min="10"
+                            max="100"
+                            value={quality}
+                            onChange={(e) => setQuality(Number(e.target.value))}
+                            className="slider"
+                          />
+                        </div>
+                      )}
+                      {targetFormat === 'png' && (
+                        <>
+                          <div className="setting-group">
+                            <label className="setting-label">压缩级别: {compressionLevel} (0=最快, 9=最小)</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="9"
+                              value={compressionLevel}
+                              onChange={(e) => setCompressionLevel(Number(e.target.value))}
+                              className="slider"
+                            />
+                          </div>
+                          <div className="setting-group">
+                            <label className="setting-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={quantizeColors}
+                                onChange={(e) => setQuantizeColors(e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              <span>启用颜色量化（减少到 256 色，可显著减小文件大小）</span>
+                            </label>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                              💡 PNG 是无损格式，从 JPG 转换时文件可能变大。启用颜色量化可减小文件，但可能略微影响颜色精度
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {targetFormat === 'webp' && (
+                        <div className="setting-group">
+                          <label className="setting-label">质量: {quality}%</label>
+                          <input
+                            type="range"
+                            min="10"
+                            max="100"
+                            value={quality}
+                            onChange={(e) => setQuality(Number(e.target.value))}
+                            className="slider"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="image-info">
+                      <div className="info-item">
+                        <span className="info-label">原始大小</span>
+                        <span className="info-value">{(originalSize / 1024).toFixed(1)} KB</span>
+                      </div>
+                      {convertedSize > 0 && (
+                        <div className="info-item">
+                          <span className="info-label">转换后大小</span>
+                          <span className="info-value highlight">{(convertedSize / 1024).toFixed(1)} KB</span>
+                        </div>
+                      )}
+                      {convertedSize > 0 && (
+                        <div className="info-item">
+                          <span className="info-label">
+                            {convertedSize < originalSize ? '压缩率' : convertedSize > originalSize ? '大小变化' : '大小'}
+                          </span>
+                          <span className={`info-value ${
+                            convertedSize < originalSize ? 'highlight' : 
+                            convertedSize > originalSize ? 'warning' : 
+                            'success'
+                          }`}>
+                            {convertedSize < originalSize 
+                              ? `-${((1 - convertedSize / originalSize) * 100).toFixed(1)}%`
+                              : convertedSize > originalSize
+                              ? `+${((convertedSize / originalSize - 1) * 100).toFixed(1)}%`
+                              : '相同'
+                            }
+                          </span>
+                        </div>
+                      )}
+                      {targetFormat === 'png' && convertedSize > 0 && (
+                        <div className="info-item" style={{ width: '100%', marginTop: '8px' }}>
+                          <span className="info-label" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            {convertedSize > originalSize 
+                              ? '💡 PNG 是无损格式，文件可能比 JPG 更大'
+                              : convertedSize === originalSize
+                              ? '✅ 压缩效果理想，文件大小已优化'
+                              : '✅ 压缩成功，文件已减小'
+                            }
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="toolbar-section">
+                      <button
+                        className="toolbar-btn danger"
+                        onClick={() => {
+                          try {
+                            // 清理内存中的 URL
+                            if (convertImageUrl && convertImageUrl.startsWith('blob:')) {
+                              try {
+                                URL.revokeObjectURL(convertImageUrl);
+                              } catch (e) {
+                                console.warn('Failed to revoke convertImageUrl:', e);
+                              }
+                            }
+                            if (convertResultUrl && convertResultUrl.startsWith('blob:')) {
+                              try {
+                                URL.revokeObjectURL(convertResultUrl);
+                              } catch (e) {
+                                console.warn('Failed to revoke convertResultUrl:', e);
+                              }
+                            }
+                            
+                            // 清除所有状态
+                            setConvertImageFile(null);
+                            setConvertImageUrl(null);
+                            setConvertResultUrl(null);
+                            setOriginalSize(0);
+                            setConvertedSize(0);
+                            setIsConverting(false);
+                            setStatus('');
+                            setStatusType('');
+                            
+                            showToast('已重置', 'success');
+                          } catch (error) {
+                            console.error('重置错误:', error);
+                            showToast('重置失败', 'error');
+                          }
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        <span>重置</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+                {status && (
+                  <div className={`status-message ${statusType}`}>
+                    <span>{status}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* 右侧：转换结果预览 */}
+            <section className="preview-panel convert-panel">
+              <div className="panel-header">
+                <div className="panel-title-group">
+                  <h2 className="panel-title">转换结果</h2>
+                  <span className="panel-subtitle">预览转换后的图片</span>
+                </div>
+              </div>
+              <div className="panel-content">
+                <div className="preview-container">
+                  {convertResultUrl ? (
+                    <div className="preview-image-wrapper">
+                      <img
+                        src={convertResultUrl}
+                        alt="Converted result"
+                        className="preview-image"
+                      />
+                    </div>
+                  ) : (
+                    <div className="preview-placeholder">
+                      <div className="placeholder-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </div>
+                      <p className="placeholder-text">转换结果将显示在这里</p>
+                      <p className="placeholder-hint">上传图片并设置参数后开始转换</p>
+                    </div>
+                  )}
+                </div>
+                <div className="action-section">
+                  <div className="status-indicator">
+                    <div className={`status-dot ${isConverting ? 'processing' : convertResultUrl ? 'success' : 'idle'}`}></div>
+                    <span className="status-text">
+                      {isConverting ? '转换中...' : convertResultUrl ? '已完成' : '就绪'}
+                    </span>
+                  </div>
+                  <div className="action-buttons">
+                    <button
+                      className="action-btn secondary"
+                      onClick={async () => {
+                        if (!convertResultUrl) return;
+                        try {
+                          const response = await fetch(convertResultUrl);
+                          const blob = await response.blob();
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `converted_${Date.now()}.${targetFormat}`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          
+                          // 延迟清理 URL，确保下载开始
+                          setTimeout(() => {
+                            URL.revokeObjectURL(url);
+                          }, 100);
+                          
+                          showToast('下载成功！文件已保存到下载文件夹', 'success');
+                        } catch (error) {
+                          console.error('Error downloading:', error);
+                          showToast('下载失败', 'error');
+                        }
+                      }}
+                      disabled={!convertResultUrl}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      <span>下载</span>
+                    </button>
+                    <button
+                      className="action-btn primary"
+                      onClick={async () => {
+                        if (!convertImageFile) {
+                          showToast('请先上传图片', 'error');
+                          return;
+                        }
+                        setIsConverting(true);
+                        setStatus('正在转换图片...');
+                        try {
+                          const reader = new FileReader();
+                          reader.onload = async (e) => {
+                            try {
+                              const base64 = e.target?.result as string;
+                              const result = await invoke<string>('convert_image', {
+                                imageData: base64,
+                                targetFormat,
+                                quality: targetFormat === 'jpg' || targetFormat === 'webp' ? quality : undefined,
+                                compressionLevel: targetFormat === 'png' ? compressionLevel : undefined,
+                                quantize: targetFormat === 'png' ? quantizeColors : false,
+                              });
+                              setConvertResultUrl(result);
+                              // 计算转换后的大小
+                              const response = await fetch(result);
+                              const blob = await response.blob();
+                              setConvertedSize(blob.size);
+                              showToast('转换完成！', 'success');
+                              setIsConverting(false);
+                            } catch (error: any) {
+                              console.error('转换失败:', error);
+                              showToast('转换失败：' + (error?.message || '未知错误'), 'error');
+                              setIsConverting(false);
+                            }
+                          };
+                          reader.readAsDataURL(convertImageFile);
+                        } catch (error: any) {
+                          console.error('处理转换时发生错误:', error);
+                          showToast('处理失败：' + (error?.message || '未知错误'), 'error');
+                          setIsConverting(false);
+                        }
+                      }}
+                      disabled={!convertImageFile || isConverting}
+                    >
+                      {isConverting ? (
+                        <>
+                          <svg className="spinner" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="32" strokeDashoffset="32">
+                              <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite" />
+                              <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite" />
+                            </circle>
+                          </svg>
+                          <span>转换中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                          </svg>
+                          <span>开始转换</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
       </main>
 
       {/* 底部提示栏 */}
@@ -631,6 +1217,9 @@ function App() {
           </div>
           <div className="footer-info">
             <span>基于 Big-LaMa 图像修复技术</span>
+            <span style={{ marginLeft: '16px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+              💡 文件仅存储在内存中，不会占用磁盘空间，关闭应用后自动清理
+            </span>
           </div>
         </div>
       </footer>

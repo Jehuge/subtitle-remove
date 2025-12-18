@@ -7,7 +7,7 @@
     "beforeDevCommand": "sh tauri/start-frontend.sh",
     "beforeBuildCommand": "cd front && npm run build",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "./dist"
+    "frontendDist": "../dist"
   },
   "app": {
     "windows": [
