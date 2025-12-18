@@ -30,7 +30,7 @@ subtitle-remove/
 │   │   └── main.rs        # Rust 主文件（处理 Tauri 命令）
 │   ├── Cargo.toml         # Rust 依赖配置
 │   └── tauri.conf.json    # Tauri 配置文件
-├── backend/               # Python 后端
+├── python/                # Python 后端
 │   ├── remove_watermark_cli.py  # 命令行接口脚本
 │   ├── lama_inpaint.py    # LaMa 模型封装
 │   ├── config.py          # 配置
@@ -128,7 +128,7 @@ npm run tauri:build
 - `remove_watermark`: 调用 Python 脚本处理去水印
 - `save_file`: 保存文件（当前未使用，使用浏览器下载）
 
-#### `backend/remove_watermark_cli.py`
+#### `python/remove_watermark_cli.py`
 
 Python 命令行接口，接收 JSON 输入：
 ```json
@@ -150,7 +150,7 @@ Python 命令行接口，接收 JSON 输入：
 
 ### 2. 模型文件路径错误
 
-确保 `backend/models/big-lama/` 目录存在且包含模型文件。
+确保 `python/models/big-lama/` 目录存在且包含模型文件。
 
 ### 3. 构建失败
 
@@ -160,7 +160,7 @@ Python 命令行接口，接收 JSON 输入：
 
 ### 4. 开发时 Python 模块导入错误
 
-确保在开发模式下，Python 可以找到 `backend` 模块。脚本会在运行时将 `backend` 目录添加到 `sys.path`。
+确保在开发模式下，Python 可以找到 `python` 模块。脚本会在运行时将 `python` 目录添加到 `sys.path`。
 
 ## 迁移说明
 
@@ -170,7 +170,7 @@ Python 命令行接口，接收 JSON 输入：
 
 - **前端**: React 组件 (`src/App.tsx`)
 - **后端通信**: Tauri 命令 (`tauri/src/main.rs`)
-- **Python 处理**: CLI 脚本 (`backend/remove_watermark_cli.py`)
+- **Python 处理**: CLI 脚本 (`python/remove_watermark_cli.py`)
 
 ### 优势
 

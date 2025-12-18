@@ -27,7 +27,7 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "../../backend"
+      "../../python"
     ]
   },
   "plugins": {}

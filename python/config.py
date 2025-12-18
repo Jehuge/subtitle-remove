@@ -5,8 +5,8 @@ from pathlib import Path
 # 当前项目根目录：remote-waterdemo
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# LaMa 模型路径（迁移到当前项目的 backend/models/big-lama）
-LAMA_MODEL_PATH = PROJECT_ROOT / "backend" / "models" / "big-lama"
+# LaMa 模型路径（迁移到当前项目的 python/models/big-lama）
+LAMA_MODEL_PATH = PROJECT_ROOT / "python" / "models" / "big-lama"
 
 
 def ensure_lama_merged() -> None:

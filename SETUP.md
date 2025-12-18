@@ -86,7 +86,7 @@ npm run tauri:build
 
 ### 模型文件缺失
 
-确保 `backend/models/big-lama/big-lama.pt` 文件存在。如果只有分片文件，程序会自动合并。
+确保 `python/models/big-lama/big-lama.pt` 文件存在。如果只有分片文件，程序会自动合并。
 
 ### Rust 编译错误
 
@@ -103,7 +103,7 @@ npm run tauri clean
 如果遇到权限问题，确保脚本有执行权限：
 
 ```bash
-chmod +x backend/remove_watermark_cli.py
+chmod +x python/remove_watermark_cli.py
 ```
 
 ## 下一步

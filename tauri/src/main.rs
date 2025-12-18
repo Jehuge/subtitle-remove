@@ -12,7 +12,7 @@ async fn remove_watermark(
     image_data: String,
     boxes: Vec<Vec<f64>>,
 ) -> Result<String, String> {
-    // 获取资源目录（backend 目录）
+    // 获取资源目录（python 目录）
     // 在开发模式下，使用项目根目录；在生产模式下，使用资源目录
     let backend_dir = if cfg!(debug_assertions) {
         // 开发模式：从 tauri 目录向上找到项目根目录
@@ -21,25 +21,25 @@ async fn remove_watermark(
             .and_then(|mut p| {
                 // 如果当前在 tauri 目录，向上两级到项目根
                 if p.ends_with("tauri") {
-                    p.parent().and_then(|p| p.parent()).map(|p| p.join("backend"))
+                    p.parent().and_then(|p| p.parent()).map(|p| p.join("python"))
                 } else {
-                    // 否则尝试直接找 backend
-                    Some(p.join("backend"))
+                    // 否则尝试直接找 python
+                    Some(p.join("python"))
                 }
             })
             .or_else(|| {
                 // 如果无法获取，尝试使用资源目录
                 app.path_resolver()
                     .resource_dir()
-                    .map(|r| r.join("backend"))
+                    .map(|r| r.join("python"))
             })
-            .ok_or("无法获取 backend 目录")?
+            .ok_or("无法获取 python 目录")?
     } else {
         // 生产模式：使用资源目录
         app.path_resolver()
             .resource_dir()
             .ok_or("无法获取资源目录")?
-            .join("backend")
+            .join("python")
     };
     
     let script_path = backend_dir.join("remove_watermark_cli.py");

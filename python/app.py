@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from PIL import Image, ImageDraw
 
-from backend import config
-from backend.lama_inpaint import LamaInpaint
+from . import config
+from .lama_inpaint import LamaInpaint
 
 
 app = FastAPI(title="Image Watermark Remover (LaMa Demo)")
@@ -27,8 +27,17 @@ lama = LamaInpaint()
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    with open("static/index.html", "r", encoding="utf-8") as f:
-        return f.read()
+    # 注意：此文件是旧的 FastAPI 服务，用于 Web 部署
+    # Tauri 版本使用 front/ 目录中的 React 前端
+    # 如果需要使用此服务，请确保 static/index.html 存在
+    try:
+        with open("../static/index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return HTMLResponse(
+            content="<h1>FastAPI 服务已迁移到 Tauri 架构</h1><p>请使用 Tauri 应用或更新 static/index.html 路径</p>",
+            status_code=200
+        )
 
 
 @app.post("/api/remove_watermark")
@@ -140,5 +149,27 @@ async def remove_watermark(
 
 if __name__ == "__main__":
     import uvicorn
+    import sys
+    from pathlib import Path
+    
+    # 添加项目根目录到路径，以便导入模块
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+    
+    # 注意：这是旧的 FastAPI Web 服务
+    # 新的 Tauri 架构使用 python/remove_watermark_cli.py
+    # 从项目根目录运行时使用：uvicorn python.app:app --host 0.0.0.0 --port 8000
+    uvicorn.run("python.app:app", host="0.0.0.0", port=8000, reload=False)
 
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+if __name__ == "__main__":
+    import uvicorn
+    import sys
+    from pathlib import Path
+    
+    # 添加项目根目录到路径，以便导入 python 模块
+    project_root = Path(__file__).parent.parent
+    sys.path.insert(0, str(project_root))
+    
+    # 注意：这是旧的 FastAPI Web 服务
+    # 新的 Tauri 架构使用 python/remove_watermark_cli.py
+    uvicorn.run("python.app:app", host="0.0.0.0", port=8000, reload=False)

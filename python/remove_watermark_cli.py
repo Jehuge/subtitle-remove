@@ -12,8 +12,8 @@ from pathlib import Path
 # 添加当前目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.lama_inpaint import LamaInpaint
-from backend import config
+from python.lama_inpaint import LamaInpaint
+from python import config
 from PIL import Image, ImageDraw, ImageFilter
 import numpy as np
 
