@@ -107,14 +107,21 @@ async fn remove_watermark(
     eprintln!("[DEBUG] 执行 Python 脚本: {}", script_path.display());
     eprintln!("[DEBUG] 工作目录: {}", backend_dir.display());
     
-    let mut child = Command::new("python3")
+    // 根据平台选择 Python 命令
+    let python_cmd = if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    };
+    
+    let mut child = Command::new(python_cmd)
         .arg(script_path.to_str().unwrap())
         .current_dir(&backend_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("启动 Python 进程失败: {}。请确保已安装 Python 3 并且 python3 命令可用", e))?;
+        .map_err(|e| format!("启动 Python 进程失败: {}。请确保已安装 Python 3 并且 {} 命令可用", e, python_cmd))?;
     
     // 写入输入数据
     if let Some(mut stdin) = child.stdin.take() {
@@ -240,14 +247,21 @@ async fn convert_image(
     eprintln!("[DEBUG] 执行 Python 脚本: {}", script_path.display());
     eprintln!("[DEBUG] 工作目录: {}", backend_dir.display());
     
-    let mut child = Command::new("python3")
+    // 根据平台选择 Python 命令
+    let python_cmd = if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    };
+    
+    let mut child = Command::new(python_cmd)
         .arg(script_path.to_str().unwrap())
         .current_dir(&backend_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("启动 Python 进程失败: {}。请确保已安装 Python 3 并且 python3 命令可用", e))?;
+        .map_err(|e| format!("启动 Python 进程失败: {}。请确保已安装 Python 3 并且 {} 命令可用", e, python_cmd))?;
     
     if let Some(mut stdin) = child.stdin.take() {
         stdin.write_all(input_str.as_bytes())
